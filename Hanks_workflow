@@ -1,0 +1,17 @@
+Workflow for Hanks approach:
+
+1. Fit a quasi-continuous path model to telemetry xyt data. The ctmcmove package facilitates this through the "mcmc.fmove" function.
+
+2. Create or import raster layers (from package "raster") for each covariate.
+
+3. Impute a quasi-continuous path (done jointly with model fitting in the "mcmc.fmove" function.
+
+4. Turn the quasi-continuous path into a CTMC discrete-space path using the "path2ctmc" command.
+
+5. Turn discrete-space path into Poisson GLM format using the "ctmc2glm" command.
+
+6. Repeat #3 - #5 multiple times (M times). Stack together the response "z", model matrix "X", and offset "tau" elements from each imputed path.
+
+7. Fit a Poisson GLM model to the stacked data with response "z", model matrix "X", offset "log(tau)", and weights for each row equal to "1/M".
+
+7 (alternate). Alternately, multiple imputation could be used, as described in Hanks et al., (2015). 
