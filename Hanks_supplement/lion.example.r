@@ -13,23 +13,25 @@
 
 
 library(ctmcmove)
-load("lion.pair.Rdata")
+load("Hanks_supplement/lion.pair.Rdata")
 attach(lion.pair)
 lion1$ID
 lion2$ID
 
-
-
-AF79=lion.pair[[1]]
-AM80=lion.pair[[2]]
+AF79=lion.pair[[1]] #female
+AM80=lion.pair[[2]] #subadult cub
 
 ## subsetting time (three-week observation window)
 
-mintime=4100.085
-maxtime=4120.085
+mintime=4100.085 #data-based
+maxtime=4120.085 #data-based
+
+min(AM80$locs$datetime) #min check
+max(AM80$locs$datetime) #max check
 
 time.idx.1=which(AF79$locs.orig[,3] >= mintime & AF79$locs.orig[,3]<maxtime)
-time.idx.2=which(AM80$locs.orig[,3] >= mintime & AM80$locs.orig[,3]<maxtime)
+time.idx.2=which(AM80$locs.orig[,3] >= mintime & AM80$locs.orig[,3]<maxtime) 
+#vectors of rows within the observation window for both lions
 
 
 #########################################################
@@ -38,14 +40,15 @@ time.idx.2=which(AM80$locs.orig[,3] >= mintime & AM80$locs.orig[,3]<maxtime)
 ##
 #########################################################
 
-AM80$locs=AM80$locs.orig[time.idx.2,]
-xy=AM80$locs[,1:2]
-t=AM80$locs[,3]
+AM80$locs=AM80$locs.orig[time.idx.2,] #subsetting locations using previous vector within the observation window
+xy=AM80$locs[,1:2] #coordinates only
+t=AM80$locs[,3] # datetime vector
 
 library(fda)
 
 ## define time points where the quasi-continuous path will be sampled
-knots = seq(mintime,maxtime,by=1/24/12)
+knots = seq(mintime,maxtime,by=1/24/12) # of the spline
+
 ## create B-spline basis vectors used to approximate the path
 b=create.bspline.basis(c(mintime,maxtime),breaks=knots,norder=3)
 ## define the sequence of times on which to sample the imputed path
