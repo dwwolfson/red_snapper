@@ -89,5 +89,16 @@ for(i in seq_along(n_snap)){
                             )
 }
 
+###############
+# Turn CTMC path into poisson glm data
+glm_list<-list()
+
+for(i in seq_along(n_snap)){
+  glm_list[[i]]<-ctmc2glm(ctmc_list[[i]], stack.static = stack_rast)}
+  
+  
+  
+  
+  
 
 
