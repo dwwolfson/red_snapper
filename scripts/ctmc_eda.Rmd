@@ -1,0 +1,190 @@
+---
+title: "snapper CTDS"
+author: "David"
+date: "3/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+Import libraries
+```{r}
+library(here)
+library(raster)
+library(sf)
+library(tidyverse)
+library(mgcv)
+library(ctmcmove)
+library(rgdal)
+```
+
+Read in data
+```{r}
+reefclass <- raster(here("data/Seabed Maps/geotiff/", "ChickenRock_Classification.tif"))
+df<-read_csv(here("data/red.snapper.locations.csv"))
+```
+
+Raster values:
+- sand == 1
+- low == 2
+- medium == 3
+- high == 4  
+
+Resize landcover data from 1m x 1m to 10m x 10m. Take the most common value from th 10 1m cells to label new 10 cells.
+```{r}
+ras<-aggregate(reefclass, fact=10, fun=modal)
+```
+
+
+
+
+Pull off coordinate reference system from landcover raster and transform snapper GPS data to match
+```{r}
+# pull off coordinate reference system from land cover raster layer
+crs_ras<-crs(ras)
+
+# convert snapper points to spatial object
+df<-df %>% st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+# transform points to crs of raster
+df<-st_transform(df, crs=crs_ras)
+
+# double check
+st_crs(df)==st_crs(ras)
+```
+
+Create a raster layer for the intercept in the eventual GLM model
+```{r}
+int<-ras
+values(int)<-1
+
+stack_rast<-stack(int, ras)
+names(stack_rast)<-cbind(c("int", names(ras)))
+```
+
+Pull off coordinates from snapper gps layer to use later. 
+(Converting to spatial sf object 'sucks up' the coordinate columns from the dataframe)
+```{r}
+df<-df %>% 
+  mutate(x=st_coordinates(.)[,1],
+         y=st_coordinates(.)[,2])
+```
+
+Drop points that fall outside the extent of the landcover raster
+```{r}
+df$ras_value<-raster::extract(ras, df)
+df<-df %>% drop_na(ras_value)
+# 152 points dropped (only 0.04%)
+```
+
+A little more housekeeping
+```{r}
+df<-df %>% arrange(trans, datetime)
+df<-df %>% rename(id=trans) #trans is an object in a later function so better to change
+```
+
+Process data for CTMC
+```{r}
+ids<-as_factor(unique(df$id))
+snapper_list<-list()
+
+for(i in seq_along(ids)){
+  tmp<-df %>% filter(id==ids[[i]])
+  
+  ## turn time into a numeric value (in days since Jan 1, 1970)
+  t<-as.numeric(strptime(tmp$datetime, format="%Y-%m-%d %H:%M:%S"))/60/60/24
+  
+  ## get xy values for each time point
+  xy<-tmp %>% dplyr::select(x,y)
+  
+  snapper_list[[i]]<-data.frame(t=t, x=xy$x, y=xy$y)
+}
+```
+
+Convert from discrete-time continuous-space to continuous-time discrete space using landcover grid.
+```{r}
+n_snap<-length(snapper_list)
+ctmc_list<-list()
+
+for(i in 1:n_snap){
+  ctmc_list[[i]]<-path2ctmc(xy = snapper_list[[i]][,-1], 
+                            t = as.numeric(snapper_list[[i]][,1]),
+                            method="LinearInterp",
+                            rast = stack_rast
+                            )}
+```
+
+Convert CTMC path into poisson glm data
+```{r}
+glm_list<-list()
+
+for(i in 1:n_snap){
+  glm_list[[i]]<-ctmc2glm(ctmc_list[[i]], 
+                          stack.static = stack_rast,
+                          stack.grad = ras)
+}
+  
+str(glm_list[[1]])
+```
+
+Convert from list to dataframe
+```{r}
+snap_dat<-glm_list[[1]]  
+for(i in 2:n_snap){
+  snap_dat<-rbind(snap_dat, glm_list[[i]])
+}  
+```
+
+Check for instantaneous and very small transitions and remove them.
+```{r}
+length(which(snap_dat$tau==0))
+# only 2,436 tau out of 4M are 0
+
+length(which(snap_dat$tau<10^-5))
+# and only 23k are less than 0.00005
+
+snap_dat<-snap_dat %>% filter(tau>10^-5)
+```
+
+I removed tau's under 10^-5 because that is what Hanks et al and Brennan et al use.  
+We probably want to think this over though.  
+
+Make sure habitat data is categorical for GLM
+```{r}
+snap_dat<-snap_dat %>% rename(habitat=ChickenRock_Classification)
+snap_dat$habitat<-as.factor(snap_dat$habitat)
+```
+
+Fit GLM
+```{r}
+m1<-glm(z~habitat+crw,
+        offset=log(tau),
+        family=poisson,
+        data=snap_dat)
+```
+
+Summarize output
+```{r}
+summary(m1)
+```
+
+Some next steps:
+- fit a glm for each snappet to compare to SSF (and also see extent of shrinkage?)
+- consider other cell sizes (histogram of residence times seems to show that they are all very low)
+- add any directional covariates/gradients?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
