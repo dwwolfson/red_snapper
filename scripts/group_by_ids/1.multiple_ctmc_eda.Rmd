@@ -1,0 +1,81 @@
+---
+title: "multiple_ctmc_eda"
+author: "Dennis Kim"
+date: "3/16/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+Import libraries
+```{r, warning=FALSE, message=FALSE}
+library(here)
+library(raster)
+library(sf)
+library(tidyverse)
+library(mgcv)
+library(ctmcmove)
+library(rgdal)
+library(broom)
+library(dplyr)
+library(jtools)
+library(ggstance)
+library(broom.mixed)
+library(dotwhisker)
+library(arm)
+```
+
+```{r}
+snap <- read_rds(here("data", "snap_dat.Rdata"))
+head(snap)
+```
+
+# fit models by id 
+```{r}
+by_snap <- snap %>%
+    group_by(id) %>%                        # group data by transmission
+    do(tidy(glm(z~habitat+crw, offset=log(tau), family=poisson, data=.))) %>%         # run model on each group
+    ungroup() %>% rename(model = id)
+
+by_snap
+```
+
+```{r}
+# interpretation of the model 
+by_snap %>% filter(model == "4291")
+```
+
+Analysis comments (ID == 4291):
+
+- sand == 1
+- low == 2
+- medium == 3
+- high == 4 
+
+The base category for habitat is habitat1 (sand) and habitat categories (habitat 2 - low and 3 - medium) are significantly more likely of use than this habitat 1 category (sand). On the other hand, habitat 4 is less likely of use than the habitat 1 category (sand). 
+
+As crw (correlated random walk) that deals with the movement capacity increases by 1 unit, it is less likely of useing the habitat?    
+
+
+```{r}
+# Generate a 'small multiple' plot
+snap_plot <- small_multiple(by_snap) +
+  theme_bw() + ylab("Coefficient Estimate") +
+  geom_hline(yintercept = 0, colour = "grey60", linetype = 2) +
+  ggtitle("CTMC GLM") +
+  theme(plot.title = element_text(face = "bold"), 
+        legend.position = "none",
+        axis.text.x = element_text(angle = 60, hjust = 1)) + xlab("Snapper ID")
+
+snap_plot
+
+# save the plot
+#ggsave("snap_plot.png", snap_plot, width = 10, height = 6)
+
+```
+
+
