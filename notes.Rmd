@@ -1,0 +1,27 @@
+---
+title: "Notes: SSF versus ctmc"
+output: html_document
+---
+
+# ctmc characteristics
+
+- large positive coefficients suggest quick transitions
+- crw is a directional covariate (that measures degree of directional persistence)
+
+
+
+# Model complexity
+
+- can consider models where transition rates depend on time of day
+- can consider directional persistence
+- random effects or two-step approaches
+- direction to nearest "reef"
+- 0 step lenghts and measurement error?
+- instantaneous and quick transitions (tau < 10^-5?)
+- difference in categories (move to better habitat)
+
+
+# Comparisons
+
+- simulate movements from both models and see which seems to better match real movements (how easy is it for non-specialists to identify the real movement path from a set of simulated paths)?
+
