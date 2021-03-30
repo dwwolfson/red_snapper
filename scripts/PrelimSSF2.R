@@ -153,7 +153,7 @@ ssffits2 <- ssffits  %>%
 ssffits<-left_join(ssffits, ssfdat2[,-2])
 
 #' Calculate speed for each class
-speeds<-NULL
+speeds<-data.frame()
 for(i in unique(ssffits$id)){
  tm<-ssffits %>% filter(id==i)
  hab1<-update_gamma(dist=tm$stepdist[[1]],
@@ -178,7 +178,7 @@ for(i in unique(ssffits$id)){
             hab2$params$shape*hab2$params$scale,
             hab3$params$shape*hab3$params$scale,
             hab4$params$shape*hab4$params$scale)
- speeds<-rbind(speeds, cbind(id=rep(i,4), habs=1:4,speed))  
+ speeds<-rbind(speeds, data.frame(id=rep(i,4), habs=as.factor(c("sand", "low", "medium", "high")),speed))  
 }  
 
 
@@ -189,31 +189,39 @@ ggplot(ssffits2, aes(x=id, y=estimate))+
 
 ggplot(as.data.frame(speeds), aes(x=id, y=speed))+
   geom_point(size=3.5, position=position_dodge(width=0.3))+
-  xlab("")+ylab(expression(hat(speed)))+facet_wrap(~habs, scales="free")
+  xlab("")+ylab(expression(hat(speed)))+facet_wrap(~habs)
 
+#' Calculate mean/median (across individuals) of their mean speed for each habitat
 speeds<-as.data.frame(speeds)
 speeds %>% group_by(habs) %>% summarize(mean(speed, na.rm=TRUE), median(speed, na.rm=TRUE))
   
-#' ## next steps
+
+#' ##' Mixed SSF
 #' 
-#' - do the same, but using glmmTMB so can fit model to all individuals
-#' will need to update code to update gamma distribution & calculate speed
-#' 
-#' - can look at directional persistence for turn angles
-#' - compare SSF nand ctmc 
-#' 
-  
-#' Fit using glmmTMB
+#' Repeat, but using glmmTMB
 #+ messages=FALSE, warning=FALSE
 library(glmmTMB) 
-ssf.tmp <- glmmTMB(case_ ~ sl_+log_sl_ + as.factor(reefStart):(sl_+log_sl_)+
-                      (1|step_id) +  + I(0+as.factor(reefStart):(sl_+log_sl_)|id),
-                   data = ssfdat2, family=poisson(),
-                    doFit=FALSE)
+ssfdat3$reefStart<-as.factor(ssfdat3$reefStart)
+ssfdat3$id<-as.factor(ssfdat3$id)
+ssfdat3$hab2<-I(ssfdat3$reefStart==2)
+ssfdat3$hab3<-I(ssfdat3$reefStart==3)
+ssfdat3$hab4<-I(ssfdat3$reefStart==4)
+ssfdat3$hab2_sl_<-ssfdat3$hab2*ssfdat3$sl_
+ssfdat3$hab3_sl_<-ssfdat3$hab3*ssfdat3$sl_
+ssfdat3$hab4_sl_<-ssfdat3$hab4*ssfdat3$sl_
+ssfdat3$hab2_log_sl_<-ssfdat3$hab2*ssfdat3$log_sl_
+ssfdat3$hab3_log_sl_<-ssfdat3$hab3*ssfdat3$log_sl_
+ssfdat3$hab4_log_sl_<-ssfdat3$hab4*ssfdat3$log_sl_
 
-#ssf.tmp <- glmmTMB(case_ ~ as.factor(reefEnd) + sl_+log_sl_ +
-#                     (1|step_id), family=poisson(), data = ssfdat,
-#                   doFit=FALSE)
+#' Warning, this takes a *long* time to fit!
+ssf.tmp <- glmmTMB(case_ ~ sl_+log_sl_ + hab2_sl_+hab3_sl_+hab4_sl_+
+                     hab2_log_sl_+hab3_log_sl_+hab4_log_sl_ -1 + (1|step_id)+
+                     (0+sl_+hab2_sl_+hab3_sl_+hab4_sl_|id)+
+                     (0+log_sl_+hab2_log_sl_+hab3_log_sl_+hab4_log_sl_|id),
+                   data = ssfdat3, family=poisson(), doFit=FALSE)
+
+                   control=glmmTMBControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)))#,control=glmmTMBControl(optimizer=optim))
+
 ssf.tmp$parameters$theta[1] <- log(1e3)
 nvarparm<-length(ssf.tmp$parameters$theta)
 ssf.tmp$mapArg <- list(theta=factor(c(NA,1:(nvarparm-1))))
@@ -221,5 +229,86 @@ ssf.tmp$mapArg <- list(theta=factor(c(NA,1:(nvarparm-1))))
 snapper.ssf<- glmmTMB:::fitTMB(ssf.tmp)
 summary(snapper.ssf)
 
+#' Random effects
+pars<-ranef(snapper.ssf)$cond$id
+
+
+#' Calculate speed for each class
+speeds2<-data.frame()
+for(i in unique(ssffits$id)){
+  tm<-ssffits %>% filter(id==i)
+  re<-pars[rownames(pars)==i,]
+  hab1<-update_gamma(dist=tm$stepdist[[1]],
+                     beta_sl = re["sl_"],
+                     beta_log_sl =re["log_sl_"])
+  hab2<-update_gamma(dist=tm$stepdist[[1]],
+                     beta_sl = re["sl_"] +
+                       re["hab2_sl_"], 
+                     beta_log_sl = re["log_sl_"] +
+                       re["hab2_log_sl_"]) 
+  hab3<-update_gamma(dist=tm$stepdist[[1]],
+                     beta_sl = re["sl_"] +
+                       re["hab3_sl_"], 
+                     beta_log_sl = re["log_sl_"] +
+                       re["hab3_log_sl_"]) 
+  hab4<-update_gamma(dist=tm$stepdist[[1]],
+                     beta_sl = re["sl_"] +
+                       re["hab4_sl_"], 
+                     beta_log_sl = re["log_sl_"] +
+                       re["hab4_log_sl_"]) 
+  speed<-c(as.numeric(hab1$params$shape)*as.numeric(hab1$params$scale),
+           as.numeric(hab2$params$shape)*as.numeric(hab2$params$scale),
+           as.numeric(hab3$params$shape)*as.numeric(hab3$params$scale),
+           as.numeric(hab4$params$shape)*as.numeric(hab4$params$scale))
+  speeds2<-rbind(speeds2, data.frame(id=rep(i,4), habs=as.factor(c("sand", "low", "medium", "high")),speed))  
+}  
+
+
+#' Calculate mean/median (across individuals) of their mean speed for each habitat
+speeds2<-as.data.frame(speeds2)
+speeds2 %>% group_by(habs) %>% summarize(mean(speed, na.rm=TRUE), median(speed, na.rm=TRUE))
+
+ggplot(speeds2, aes(x=id, y=speed))+
+  geom_point(size=3.5, position=position_dodge(width=0.3))+
+  xlab("")+ylab(expression(hat(speed)))+facet_wrap(~habs)
+
+#' compare individual fits with glmmTMB
+plot(speeds$speed, speeds2$speed)
+abline(0,1)
+
+
+  
+
 
  
+#' TRY SCALING: still problems
+#' 
+
+#' Try scaling first
+ssfdat3$ssl_<-as.numeric(scale(ssfdat3$sl_))
+ssfdat3$slog_sl_<-as.numeric(scale(ssfdat3$log_sl_))
+ssfdat3$hab2_ssl_<-ssfdat3$hab2*ssfdat3$ssl_
+ssfdat3$hab3_ssl_<-ssfdat3$hab3*ssfdat3$ssl_
+ssfdat3$hab4_ssl_<-ssfdat3$hab4*ssfdat3$ssl_
+ssfdat3$hab2_slog_sl_<-ssfdat3$hab2*ssfdat3$slog_sl_
+ssfdat3$hab3_slog_sl_<-ssfdat3$hab3*ssfdat3$slog_sl_
+ssfdat3$hab4_slog_sl_<-ssfdat3$hab4*ssfdat3$slog_sl_
+
+ssf.tmp <- glmmTMB(case_ ~ ssl_+slog_sl_ + hab2_ssl_+hab3_ssl_+hab4_ssl_+
+                     hab2_slog_sl_+hab3_slog_sl_+hab4_slog_sl_ -1+ (1|step_id)+
+                     (0+ssl_+hab2_ssl_+hab3_ssl_+hab4_ssl_|id)+
+                     (0+slog_sl_+hab2_slog_sl_+hab3_slog_sl_+hab4_slog_sl_|id),
+                   data = ssfdat3, family=poisson(), doFit=FALSE)
+ssf.tmp$parameters$theta[1] <- log(1e6)
+nvarparm<-length(ssf.tmp$parameters$theta)
+ssf.tmp$mapArg <- list(theta=factor(c(NA,1:(nvarparm-1))))
+#ssf.tmp$mapArg <- list(theta=factor(c(NA)))
+snapper.ssf<- glmmTMB:::fitTMB(ssf.tmp)
+summary(snapper.ssf)
+
+
+#' ## next steps
+#' 
+#' - can look at directional persistence from turn angles
+#' - compare SSF nand ctmc 
+#' 
