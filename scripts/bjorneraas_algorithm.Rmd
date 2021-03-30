@@ -1,0 +1,160 @@
+---
+title: "Bjorneraas filtering algorithm"
+author: "David"
+date: "3/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F)
+```
+
+The following is the method presented in Bjorneraas et al. 2010 Screening Global Positioning System Location Data for Errors Using Animal Movement Characteristics. The Journal of Wildlife Management 74:1361–1366.
+
+```{r message=F}
+library(adehabitatLT)
+```
+
+There are two main functions:
+
+1) GPS.screening applies the algorithm in two steps  
+  step 1: remove all points that are far off  
+  step 2: detect spikes (high outgoing and incoming speed and a sharp return)  
+
+
+2) GPS.screening.wrp prepares data for the screening algorithm 
+
+GPS.screening  
+
+Argument list:  
+- medcrit: $\Delta$, the cutoff value for the median, which is used in the first step from the first round  
+- meancrit: $\mu$, the cutoff value for the mean, which is used in the second step from the first round  
+- spikesp: $\alpha$, the criterion for the speed of the outgoing and incoming move, which is used in the second round  
+- spikecos: $\theta$, the criterion for the cosine of the angle associated with the outgoing and incoming move, which is used in the second round    
+
+Here are the values used for moose in their paper:  
+ $\Delta$ 100,000 meters  
+ $\mu$ 10,000 meters  
+ $\alpha$ = 1500 meters/hour  
+ $\theta$ = -0.97  
+ 
+```{r}
+
+GPS.screening <- function(x, medcrit, meancrit, spikesp, spikecos){
+    ###round one:
+    #############
+    ###remove points far off:
+    RoundOne <- function(x, df, win, MM){
+        if (x<=win){
+            dfT <- df[c(1:2*win),]
+        }
+        if (x>(nrow(df)-win)){
+            dfT <- df[c((nrow(df)-2*win):(nrow(df))),]
+        }
+        if (x>win & x<=(nrow(df)-win)){
+            dfT <- df[c((x-win):(x+win)),]
+        }
+        if (MM=="mean"){
+            temp <- sqrt((df$x[x]-mean(dfT$x, na.rm=T))^2+(df$y[x]-mean(dfT$y, na.rm=T))^2)
+                                        #calculate the distance between the mean and the focal point
+        }
+        if (MM=="median"){
+            temp <- sqrt((df$x[x]-median(dfT$x, na.rm=T))^2+(df$y[x]-median(dfT$y, na.rm=T))^2)
+                                        #calculate the distance between the median and the focal point
+        }
+        return(temp)
+    }
+
+    ##get the points that are really far off, by using the median
+    x$R1dmed <- unlist(lapply(c(1:nrow(x)), RoundOne, df=x, win=10, MM="median"))
+
+    ##get the points that are rather far off, by using the mean
+    x$R1dmean <- meancrit+1
+    x$R1dmean[x$R1dmed<medcrit] <- unlist(lapply(c(1:nrow(x[x$R1dmed<medcrit,])),  RoundOne, df=x[x$R1dmed<medcrit,], win=10, MM="mean"))
+    x$R1error <- ifelse(x$R1dmean>meancrit, TRUE, FALSE)
+
+    ###round two:
+    #############
+    ##find spikes
+    xT <- x[x$R1error==FALSE,]
+    xT <- as.ltraj(xT[,c("x","y")], date=xT$date, id=xT$id)[[1]]
+
+    x$R2error <- NA
+    x$R2error[x$R1error==FALSE] <- ((xT$dist/xT$dt*3600)>spikesp & c(NA, (xT$dist/xT$dt*3600)[-nrow(xT)])>spikesp & cos(xT$rel.angle)<(spikecos))
+    return(x)
+}
+
+```
+
+  
+GPS.screening.wrp
+
+Format of those vectors has to be:  
+- id: numeric, character or factor  
+- x: numeric  
+-	y: numeric  
+-	date: POSIXct  
+
+
+```{r}
+GPS.screening.wrp <- function(id, x, y, da, medcrit, meancrit, spikesp, spikecos){
+    mydata <- ld(as.ltraj(id = id, xy = data.frame(x=x,y=y), date = da))
+    mydata <- split(mydata, mydata$id)
+    mydata <- lapply(mydata, GPS.screening, medcrit=medcrit, meancrit=meancrit, spikesp=spikesp, spikecos=spikecos)
+    mydata <- do.call("rbind", mydata)
+    return(data.frame(id=mydata$id, x=mydata$x, y=mydata$y, date=mydata$date, R1dmed=mydata$R1dmed, R1dmean=mydata$R1dmean, R1error=mydata$R1error, R2error=mydata$R2error))
+}
+
+```
+
+***
+***
+##An example
+
+### Create a trajectory
+```{r}
+set.seed(0)
+demo <- simm.crw(date=as.POSIXct(c(1:100)*3600, origin="1970-01-01"), h=10, r=0.2, id="bob")
+plot(demo)
+demo <- ld(demo)
+demo <- demo[, c("id", "x", "y", "date")]
+```
+
+### Introduce some errors
+2 consecutive points real far off
+```{r}
+demo$x[5:6] <- demo$x[5:6]+500000
+demo$y[5:6] <- demo$y[5:6]+500000
+```
+
+
+
+### A spike
+```{r}
+demo$x[49] <- demo$x[50]
+demo$y[49] <- demo$y[50]
+demo$x[51] <- demo$x[50]
+demo$y[51] <- demo$y[50]
+demo$x[50] <- demo$x[50]+1500
+demo$y[50] <- demo$y[50]+1500
+```
+
+Plot
+```{r}
+plot(demo$x, demo$y)
+```
+
+
+### Apply screening script
+```{r}
+demo <- GPS.screening.wrp(demo$id, demo$x, demo$y, demo$date, medcrit=100000, meancrit=10000, spikesp=1500, spikecos=(-0.97))
+demo[c(1:9, 45:54),]
+```
+
+
+
+
+
+
+
+
