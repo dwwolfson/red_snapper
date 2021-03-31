@@ -220,7 +220,7 @@ ssf.tmp <- glmmTMB(case_ ~ sl_+log_sl_ + hab2_sl_+hab3_sl_+hab4_sl_+
                      (0+log_sl_+hab2_log_sl_+hab3_log_sl_+hab4_log_sl_|id),
                    data = ssfdat3, family=poisson(), doFit=FALSE)
 
-                   control=glmmTMBControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)))#,control=glmmTMBControl(optimizer=optim))
+                 #  control=glmmTMBControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)))#,control=glmmTMBControl(optimizer=optim))
 
 ssf.tmp$parameters$theta[1] <- log(1e3)
 nvarparm<-length(ssf.tmp$parameters$theta)
