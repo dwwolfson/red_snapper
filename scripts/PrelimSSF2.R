@@ -85,6 +85,7 @@ tr3<-tr2 %>% nest(data= -"id") %>% mutate(steps = map(data, function(x)
 
 #' ## Fit SSF models to individuals and using mixed model
 
+#' Create random points
 temp<-tr2 %>% nest(data=-id)%>%  
   mutate(data2 = map(
     data, ~ .x %>%
@@ -95,7 +96,6 @@ temp<-tr2 %>% nest(data=-id)%>%
   ))
 sl_distr(temp$data2[[1]])
 
-#' Create random points
 ssfdat <- tr2 %>% nest(data=-id)%>%  
   mutate(data2 = map(
     data, ~ .x %>%
@@ -112,6 +112,30 @@ ssfdat <- tr2 %>% nest(data=-id)%>%
   ))
 
 
+#' ## JULIANA
+#' 
+#' Step 1: pick 3 individuals
+#' 
+#' - use the above temp data to pick 3 individuals
+#' - tabulate for each individual (case_ by reefStart)
+#' - tabulate for each individual (case_ by reefEnd)
+#' - filter (case_1 i.e., used locations), then tabulate by indivdual (reefStart by reefEdn)
+
+#' Step 2: fit 3 SSFs
+#' 
+#' - Model1: fit_issf(case_ ~  + sl_+log_sl_ + 
+#' as.factor(reefStart):(sl_ +  log_sl_) + strata(step_id), data = data by individual)
+#' 
+#' - Model 2: fit_issf(case_ ~  + sl_+log_sl_ + 
+#' as.factor(reefEnd) + strata(step_id), data = data by individual)
+#' 
+#' - Model 3: fit_issf(case_ ~  + sl_+log_sl_ + 
+#' as.factor(reefStart):(sl_ +  log_sl_) + as.factor(reefEnd) strata(step_id), data = data by individual)
+#' 
+#' 
+#' Step 3: compare above to ctmc approach to understand differences/similarities
+#' Step 4: estimate transition probabilities from the 2 models/compare simulated movements, etc
+#' 
 ssfdat2 <- ssfdat[,-2] %>%
     mutate(stepdist=map(data2, ~.x %>%
          sl_distr()), tadist=map(data2,~.x %>%
