@@ -336,3 +336,7 @@ summary(snapper.ssf)
 #' - can look at directional persistence from turn angles
 #' - compare SSF nand ctmc 
 #' 
+#' ## Save data
+#' 
+save(ssfdat, ssfdat2, ssfdat3, file = "data/processed_data/ssfdat.rdata")
+#' 
