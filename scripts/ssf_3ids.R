@@ -24,7 +24,7 @@ set.seed(168847)
 #' 
 #' ## Load data
 #' 
-load("data/processed_data/ssfdat.rdata") # ssfdat from John's code (see PrelimSSF2.R).
+load(here("data/processed_data", "ssfdat.rdata")) # ssfdat from John's code (see PrelimSSF2.R).
 
 #' ## Unnest and reformat data for tabulation
 #' 
