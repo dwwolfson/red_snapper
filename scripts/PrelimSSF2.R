@@ -303,32 +303,32 @@ abline(0,1)
 
   
 
-
- 
-#' TRY SCALING: still problems
 #' 
-
-#' Try scaling first
-ssfdat3$ssl_<-as.numeric(scale(ssfdat3$sl_))
-ssfdat3$slog_sl_<-as.numeric(scale(ssfdat3$log_sl_))
-ssfdat3$hab2_ssl_<-ssfdat3$hab2*ssfdat3$ssl_
-ssfdat3$hab3_ssl_<-ssfdat3$hab3*ssfdat3$ssl_
-ssfdat3$hab4_ssl_<-ssfdat3$hab4*ssfdat3$ssl_
-ssfdat3$hab2_slog_sl_<-ssfdat3$hab2*ssfdat3$slog_sl_
-ssfdat3$hab3_slog_sl_<-ssfdat3$hab3*ssfdat3$slog_sl_
-ssfdat3$hab4_slog_sl_<-ssfdat3$hab4*ssfdat3$slog_sl_
-
-ssf.tmp <- glmmTMB(case_ ~ ssl_+slog_sl_ + hab2_ssl_+hab3_ssl_+hab4_ssl_+
-                     hab2_slog_sl_+hab3_slog_sl_+hab4_slog_sl_ -1+ (1|step_id)+
-                     (0+ssl_+hab2_ssl_+hab3_ssl_+hab4_ssl_|id)+
-                     (0+slog_sl_+hab2_slog_sl_+hab3_slog_sl_+hab4_slog_sl_|id),
-                   data = ssfdat3, family=poisson(), doFit=FALSE)
-ssf.tmp$parameters$theta[1] <- log(1e6)
-nvarparm<-length(ssf.tmp$parameters$theta)
-ssf.tmp$mapArg <- list(theta=factor(c(NA,1:(nvarparm-1))))
-#ssf.tmp$mapArg <- list(theta=factor(c(NA)))
-snapper.ssf<- glmmTMB:::fitTMB(ssf.tmp)
-summary(snapper.ssf)
+#' 
+#' #' TRY SCALING: still problems
+#' #'
+#' 
+#' #' Try scaling first
+#' ssfdat3$ssl_<-as.numeric(scale(ssfdat3$sl_))
+#' ssfdat3$slog_sl_<-as.numeric(scale(ssfdat3$log_sl_))
+#' ssfdat3$hab2_ssl_<-ssfdat3$hab2*ssfdat3$ssl_
+#' ssfdat3$hab3_ssl_<-ssfdat3$hab3*ssfdat3$ssl_
+#' ssfdat3$hab4_ssl_<-ssfdat3$hab4*ssfdat3$ssl_
+#' ssfdat3$hab2_slog_sl_<-ssfdat3$hab2*ssfdat3$slog_sl_
+#' ssfdat3$hab3_slog_sl_<-ssfdat3$hab3*ssfdat3$slog_sl_
+#' ssfdat3$hab4_slog_sl_<-ssfdat3$hab4*ssfdat3$slog_sl_
+#' 
+#' ssf.tmp <- glmmTMB(case_ ~ ssl_+slog_sl_ + hab2_ssl_+hab3_ssl_+hab4_ssl_+
+#'                      hab2_slog_sl_+hab3_slog_sl_+hab4_slog_sl_ -1+ (1|step_id)+
+#'                      (0+ssl_+hab2_ssl_+hab3_ssl_+hab4_ssl_|id)+
+#'                      (0+slog_sl_+hab2_slog_sl_+hab3_slog_sl_+hab4_slog_sl_|id),
+#'                    data = ssfdat3, family=poisson(), doFit=FALSE)
+#' ssf.tmp$parameters$theta[1] <- log(1e6)
+#' nvarparm<-length(ssf.tmp$parameters$theta)
+#' ssf.tmp$mapArg <- list(theta=factor(c(NA,1:(nvarparm-1))))
+#' #ssf.tmp$mapArg <- list(theta=factor(c(NA)))
+#' snapper.ssf<- glmmTMB:::fitTMB(ssf.tmp)
+#' summary(snapper.ssf)
 
 
 #' ## next steps
