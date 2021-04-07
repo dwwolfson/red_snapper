@@ -58,7 +58,7 @@ tabEnd <- dat4tab %>%
 #' 
 #' Use ssfdat3 as it already has the stratification variable and it's ready for fitting the models
 #' 
-#' Filter by the selected ids 12,16,37
+#' Filter by the selected ids 9, 12,16
 #' 
 ssfdat_3ids <- ssfdat3 %>% 
   filter(id == "9" | id == "12" | id == "16")
@@ -82,7 +82,7 @@ ssfm2 <- ssfdat_3ids  %>% nest(data2=-id) %>%
 #' 
 ssfm3 <- ssfdat_3ids  %>% nest(data2=-id) %>%
   mutate(mod3 = map(data2, function(x) (try(fit_issf(case_ ~  + sl_+log_sl_ +
-                                                      as.factor(reefEnd):(sl_ +  log_sl_) + as.factor(reefEnd) + strata(step_id), data = x)))))
+                                                      as.factor(reefStart):(sl_ +  log_sl_) + as.factor(reefEnd) + strata(step_id), data = x)))))
 #' 
 #' Pull off coefficients for first model
 coefssf1<-NULL
@@ -101,6 +101,15 @@ for(i in 1:3){
     coefssf2<-rbind(coefssf2, cbind(id=ssfm2$id[[i]],  broom::tidy(ssfm2$mod2[[i]]$model)
     ))
   } else(print(ssfm2$id[[i]]))
+}
+
+#' Pull off coefficients for third model
+coefssf3<-NULL
+for(i in 1:3){
+  if(attr(ssfm3$mod3[[i]], "class")!="try-error"){
+    coefssf3<-rbind(coefssf3, cbind(id=ssfm3$id[[i]],  broom::tidy(ssfm3$mod3[[i]]$model)
+    ))
+  } else(print(ssfm3$id[[i]]))
 }
 
 #' 
