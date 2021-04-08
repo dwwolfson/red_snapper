@@ -40,3 +40,5 @@ vignettes/*.pdf
 
 # data files
 /data/
+
+# Exceptions (but make sure not over 100MB)
