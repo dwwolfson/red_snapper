@@ -20,12 +20,16 @@ library(tidyverse)
 library(mgcv)
 library(ctmcmove)
 library(rgdal)
+library(glue)
+library(broom)
+library(dotwhisker)
 ```
 
 Read in data
 ```{r}
 reefclass <- raster(here("data/Seabed Maps/geotiff/", "ChickenRock_Classification.tif"))
 df<-read_csv(here("data/red.snapper.locations.csv"))
+current_resolution<-params$resolution
 ```
 
 Raster values:
@@ -34,7 +38,7 @@ Raster values:
 - medium == 3
 - high == 4  
 
-Resize landcover data from 1m x 1m to 10m x 10m. Take the most common value from th 10 1m cells to label new 10 cells.
+Resize landcover data using parameter value. Take the most common values (the mode) from the original 1m cells to assign larger cells.
 ```{r}
 ras<-aggregate(reefclass, fact=params$resolution, fun=modal)
 ```
@@ -76,7 +80,6 @@ Drop points that fall outside the extent of the landcover raster
 ```{r}
 df$ras_value<-raster::extract(ras, df)
 df<-df %>% drop_na(ras_value)
-# 152 points dropped (only 0.04%)
 ```
 
 A little more housekeeping
@@ -137,6 +140,15 @@ for(i in 1:n_snap){
 str(glm_list[[1]])
 ```
 
+Add individual snapper id
+```{r add each snapper id to list}
+n.list <- length(ctmc_list)
+
+for(i in 1:n.list){
+  glm_list[[i]]$id <- rep(as.numeric(unique(df$id)[i]), times = length(glm_list[[i]]$z))
+}
+```
+
 Convert from list to dataframe
 ```{r list to dataframe}
 snap_dat<-glm_list[[1]]  
@@ -147,11 +159,11 @@ for(i in 2:n_snap){
 
 Check for instantaneous and very small transitions and remove them.
 ```{r remove very small transitions}
-length(which(snap_dat$tau==0))
+zeros<-length(which(snap_dat$tau==0))
+cat(paste0("There were ", zeros, " transitions with zero time"))
 
-
-length(which(snap_dat$tau<10^-5))
-
+teensies<-length(which(snap_dat$tau<10^-5))
+cat(paste0("There were ", teensies, " transitions with tau less than 0.0001 seconds"))
 
 snap_dat<-snap_dat %>% filter(tau>10^-5)
 ```
@@ -164,6 +176,14 @@ Make sure habitat data is categorical for GLM
 snap_dat<-snap_dat %>% rename(habitat=ChickenRock_Classification)
 snap_dat$habitat<-as.factor(snap_dat$habitat)
 ```
+
+Save out data for later use
+```{r}
+tmp_file<-glue("glm_ready_3fish_{current_resolution}_m^2_res.Rdata")
+if(!tmp_file%in%here("processed_data")){
+ saveRDS(snap_dat, file=here("processed_data", tmp_file))}
+```
+
 
 Fit GLM
 ```{r fit glm}
@@ -178,11 +198,33 @@ Summarize output
 summary(m1)
 ```
 
+Also fit models for each ID
+```{r}
+by_snap <- snap_dat %>%
+    group_by(id) %>%                        # group data by transmission
+    do(tidy(glm(z~habitat+crw, offset=log(tau), family=poisson, data=.))) %>%         # run model on each group
+    ungroup() %>% rename(model = id)
+```
+
+Plot the coefficients
+```{r}
+snap_plot <- small_multiple(by_snap) +
+  theme_bw() + ylab("Coefficient Estimate") +
+  geom_hline(yintercept = 0, colour = "grey60", linetype = 2) +
+  ggtitle("CTMC GLM") +
+  theme(plot.title = element_text(face = "bold"), 
+        legend.position = "none",
+        axis.text.x = element_text(angle = 60, hjust = 1)) + xlab("Snapper ID")
+
+snap_plot
+```
+
+
 Function used to render html (run in console)
 ```{r}
 render_report<-function(resolution){
   rmarkdown::render(
-    here::here("scripts/ctmc_parameterized.Rmd"), params=list(
+    here::here("scripts/parameterized_reports/ctmc_parameterized.Rmd"), params=list(
       resolution=resolution
     ),
     output_file = paste0("CTMC grouped summary for ", resolution, " m^2 grid cell size.html")
