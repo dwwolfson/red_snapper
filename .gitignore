@@ -42,3 +42,4 @@ vignettes/*.pdf
 /data/
 
 # Exceptions (but make sure not over 100MB)
+!/data/processed_data/steps_4ssf.RDS
