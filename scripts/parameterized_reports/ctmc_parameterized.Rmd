@@ -1,10 +1,11 @@
 ---
-title: "snapper CTDS"
 author: "David"
-date: "3/15/2021"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
 params: 
   resolution: 10
+  title: "make sure to set this title!"
+title: "`r params$title`"
 ---
 
 ```{r setup, include=FALSE}
@@ -25,11 +26,15 @@ library(broom)
 library(dotwhisker)
 ```
 
+
+
 Read in data
 ```{r}
 reefclass <- raster(here("data/Seabed Maps/geotiff/", "ChickenRock_Classification.tif"))
 df<-read_csv(here("data/red.snapper.locations.csv"))
 current_resolution<-params$resolution
+current_resolution
+cat(paste0("the current grid size being used is ", current_resolution, "  meters ^2"))
 ```
 
 Raster values:
@@ -222,12 +227,13 @@ snap_plot
 
 Function used to render html (run in console)
 ```{r}
-render_report<-function(resolution){
+render_report<-function(resolution, title){
   rmarkdown::render(
     here::here("scripts/parameterized_reports/ctmc_parameterized.Rmd"), params=list(
-      resolution=resolution
+      resolution=resolution,
+      title=title
     ),
-    output_file = paste0("CTMC grouped summary for ", resolution, " m^2 grid cell size.html")
+    output_file = paste0("CTMC 3 snapper example grouped and individual summary for ", resolution, " m^2 grid cell size.html")
     )
 }
 ```
