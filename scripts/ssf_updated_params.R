@@ -1,6 +1,6 @@
-#' # Updated parameters after fitting reefStart SSF
+#' # Update parameters after fitting reefStart SSF
 #' 
-#' Description: This script updates parameters of step length and turn angle distribution for each habitat class for our first model (reefStart). It uses as input steps generated in steps_4ssf.R and stored in process data as steps_4ssf.RDS. To update the parameters, it follows examples from here:  https://conservancy.umn.edu/handle/11299/218272  (See Appendix B)
+#' Description: This script updates parameters of step length and turn angle distribution for each habitat class for our first model (reefStart) using purrr::map syntax. It uses as input steps generated in steps_4ssf.R and stored in process data as steps_4ssf.RDS. To update the parameters, it follows examples from here:  https://conservancy.umn.edu/handle/11299/218272  (See Appendix B)
 #' 
 #' Programmer: JV
 #' 
@@ -59,15 +59,17 @@ rownames(coefs4all) <- NULL # remove row names
 #' 
 #' 
 #' _____________________________________________________________________________
-#' ## Manually update parameters for Step-length distribution
+#' ## Manually update parameters for step-length distribution and calculate speed
 #' 
-# Sand step-length distribution updated and stored in up_sand_sl list column
+# Sand step-length distribution updated and stored in up_sand_sl list column. Then map the latter and calculate speed. Same for all habitats.
 
 sand_sl <- ssf_start %>% 
   mutate(up_sand_sl = map(mod_start, ~update_gamma(
-    dist = .x$sl_, 
+    dist = .x$sl_, # sand is the reference category
     beta_sl = .x$model$coefficients["sl_"], 
-    beta_log_sl = .x$model$coefficients["log_sl_"]))) # sand is the reference category
+    beta_log_sl = .x$model$coefficients["log_sl_"]))) %>% 
+  mutate(speed_sand = map_dbl(up_sand_sl, ~(.x$params$shape*.x$params$scale))) %>% 
+  pluck("speed_sand") 
 
 # Low_relief step-length distribution updated and stored in up_lr_sl list column
 
@@ -77,7 +79,9 @@ low_relief_sl <- ssf_start %>%
     beta_sl = .x$model$coefficients["sl_"] +
       .x$model$coefficients["sl_:reefStartlow_relief"],
     beta_log_sl = .x$model$coefficients["log_sl_"] +
-      .x$model$coefficients["log_sl_:reefStartlow_relief"])))
+      .x$model$coefficients["log_sl_:reefStartlow_relief"]))) %>% 
+  mutate(speed_low = map_dbl(up_lr_sl, ~(.x$params$shape*.x$params$scale))) %>% 
+  pluck("speed_low")
 
 # Medium_relief step-length distribution updated and stored in up_mr_sl list column
 
@@ -87,7 +91,9 @@ medium_relief_sl <- ssf_start %>%
     beta_sl = .x$model$coefficients["sl_"] +
       .x$model$coefficients["sl_:reefStartmedium_relief"],
     beta_log_sl = .x$model$coefficients["log_sl_"] +
-      .x$model$coefficients["log_sl_:reefStartmedium_relief"])))
+      .x$model$coefficients["log_sl_:reefStartmedium_relief"]))) %>% 
+  mutate(speed_med = map_dbl(up_mr_sl, ~(.x$params$shape*.x$params$scale))) %>% 
+  pluck("speed_med")
 
 # High_relief step-length distribution updated and stored in up_hr_sl list column
 
@@ -97,12 +103,13 @@ high_relief_sl <- ssf_start %>%
     beta_sl = .x$model$coefficients["sl_"] +
       .x$model$coefficients["sl_:reefStarthigh_relief"],
     beta_log_sl = .x$model$coefficients["log_sl_"] +
-      .x$model$coefficients["log_sl_:reefStarthigh_relief"])))
+      .x$model$coefficients["log_sl_:reefStarthigh_relief"]))) %>% 
+  mutate(speed_high = map_dbl(up_hr_sl, ~(.x$params$shape*.x$params$scale))) %>% 
+  pluck("speed_high")
 
-sand_sl %>% pluck("up_sand_sl") # if you want to explore only one id, pass it as the second argument like pluck("up_sand_sl", 1)
-low_relief_sl %>% pluck("up_lr_sl")
-medium_relief_sl %>% pluck("up_mr_sl")
-high_relief_sl %>% pluck("up_hr_sl")
+speeds_df <- cbind(sand_sl, low_relief_sl, medium_relief_sl, high_relief_sl) %>% as.data.frame()
+
+speeds_df
 
 #' _____________________________________________________________________________
 #' ## Manually update parameters for turn-angle distribution
@@ -134,10 +141,11 @@ high_relief_ta <- ssf_start %>%
     beta_cos_ta = .x$model$coefficients["cos_ta_"] +
       .x$model$coefficients["cos_ta_:reefStarthigh_relief"])))
 
-sand_ta %>% pluck("up_sand_ta")
-low_relief_ta %>% pluck("up_lr_ta")
-medium_relief_ta %>% pluck("up_mr_ta")
-high_relief_ta %>% pluck("up_hr_ta")
+#sand_ta %>% pluck("up_sand_ta") # check results
+#low_relief_ta %>% pluck("up_lr_ta")
+#medium_relief_ta %>% pluck("up_mr_ta")
+#high_relief_ta %>% pluck("up_hr_ta")
+#'
 #'
 #' _____________________________________________________________________________
 #' ## Save Data
