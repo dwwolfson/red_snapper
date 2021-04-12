@@ -6,7 +6,7 @@ A single file, 'ctmc_parameterized.Rmd', can do serve several functions. By runn
 
 As of 4/11/2021, we're looking at just 3 snappers for a comparision example with iSSFs (num 9,12,16). I made htmls for 5-50 m^2 by 5. My next step is to import all data intermediate files, fit each set, and plot the coefficients varying by cell size.
 
-In order to run this .Rmd file using parameter specification first run the last chunk:  
+In order to run this .Rmd file using parameter specification, first run the last chunk:  
 ```  
   render_report<-function(resolution, title){
     rmarkdown::render(
@@ -14,7 +14,8 @@ In order to run this .Rmd file using parameter specification first run the last 
         resolution=resolution,
         title=title
       ),
-      output_file = paste0("CTMC 3 snapper example grouped and individual summary for ", resolution, " m^2 grid cell   size.html")
+      output_file = paste0("CTMC 3 snapper example grouped and individual summary for ",
+      resolution, " m^2 grid cell size.html")
       )
   }  
 ```  
