@@ -1,0 +1,238 @@
+---
+title: "ctmc_eda"
+author: "Dennis Kim"
+date: "3/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+Import libraries
+```{r, warning=FALSE, message=FALSE}
+library(here)
+library(raster)
+library(sf)
+library(tidyverse)
+library(mgcv)
+library(ctmcmove)
+library(rgdal)
+library(glmnet)
+```
+
+Read in data
+
+#Read in data (Vairable names)
+
+- trans = transmitter number
+- datetime = date and time of the acoustic detection
+ - julian = day of the year of acoustic detection
+ - lat = latitude of fish position (degrees N)
+ - lon = longitude of fish position (degrees W)
+ - depth = depth of fish from surface (m; note that the study area is approximately 38 m deep)
+ - num = unique fish number to be used to identify individuals in this study -since one transmitter was used on two separate fish
+ - mov = movement rate of an individual fish between that and following -location (m/s)
+ - dist = distance fish moved between that and following location (m)
+ - sec = time between that and following acoustic detection 
+
+```{r}
+reefclass <- raster(here("data/seabed_maps/Geotiff/ChickenRock_Classification.tif"))
+df<-read_csv(here("data/red.snapper.locations.csv"))
+head(df)
+```
+
+Raster values:
+- sand == 1
+- low == 2
+- medium == 3
+- high == 4  
+
+Resize landcover data from 1m x 1m to 10m x 10m. Take the most common value from the 10 1m cells to label new 10 cells.
+```{r}
+ras<-aggregate(reefclass, fact=10, fun=modal)
+```
+
+Pull off coordinate reference system from landcover raster and transform snapper GPS data to match
+```{r}
+# pull off coordinate reference system from land cover raster layer
+crs_ras<-crs(ras)
+
+# convert snapper points to spatial object
+df<-df %>% st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+# transform points to crs of raster
+df<-st_transform(df, crs=crs_ras)
+
+# double check
+st_crs(df)==st_crs(ras)
+```
+
+Pull off coordinates from snapper gps layer to use later.
+(Converting to spatial sf object 'sucks up' the coordinate columns from the dataframe)
+```{r}
+df<-df %>% 
+  mutate(x=st_coordinates(.)[,1],
+         y=st_coordinates(.)[,2])
+```
+
+Drop points that fall outside the extent of the landcover raster
+```{r}
+df$ras_value<-raster::extract(ras, df)
+df<-df %>% drop_na(ras_value)
+# 152 points dropped (only 0.04%)
+```
+
+A little more housekeeping
+```{r}
+df<-df %>% arrange(num, datetime)
+df<-df %>% rename(id=num) #trans is an object in a later function so better to change
+```
+
+# Set up Data For Continuous Time Markov Chain (CTMC)
+
+Process data for CTMC
+```{r}
+ids<-as_factor(unique(df$id)) # factorize the ids 
+snapper_list<-list() # create an empty list for the storage value from the for-loop processes below
+
+for(i in seq_along(ids)){
+  
+  # call each unique ids from the df and store it as tmp
+  tmp<-df %>% filter(id==ids[[i]]) 
+  
+  ## turn time into a numeric value (in days since May 7, 2019)
+  t<-as.numeric(strptime(tmp$datetime, format="%Y-%m-%d %H:%M:%S"))/60/60/24
+  
+  ## get xy values for each time point
+  xy<-tmp %>% dplyr::select(x,y)
+  
+  snapper_list[[i]]<-data.frame(t=t, x=xy$x, y=xy$y)
+}
+head(snapper_list[[1]])
+```
+
+# Bring In Covariate Data For CTMC
+
+Create a raster layer for the intercept in the eventual GLM model
+```{r}
+# label the raster layer as int
+int<-ras
+# Create a flat raster to represent the intercept
+values(int)<-1
+# make the original raster layer and intercept layer have same spatial extent and resolution
+stack_rast<-stack(int, ras)
+# name it as stack_rast by binding the columns of the two
+names(stack_rast)<-cbind(c("int", names(ras)))
+```
+
+# Create CTMC Path
+
+Convert from discrete-time continuous-space to continuous-time discrete space using landcover grid.
+```{r}
+n_snap<-length(snapper_list) # number of the snappers 
+
+ctmc_list<-list() # create an empty list for storing ctmc path values
+for(i in 1:n_snap){
+  ctmc_list[[i]]<-path2ctmc(xy = snapper_list[[i]][,-1], 
+                            t = as.numeric(snapper_list[[i]][,1]),
+                            method="LinearInterp",
+                            rast = stack_rast)
+}
+
+# write out files for later analyses
+#write_rds(ctmc_list, path = here("data", "ctmc_list.Rdata"))
+```
+
+# Turn CTMC Path Into Poisson GLM Data
+
+Convert CTMC path into poisson glm data
+```{r}
+glm_list<-list()
+
+for(i in 1:n_snap){
+  glm_list[[i]]<-ctmc2glm(ctmc_list[[i]], 
+                          stack.static = stack_rast,
+                          stack.grad = ras)
+}
+  
+str(glm_list[[1]])
+head(glm_list)
+
+# write out files for later analyses
+#write_rds(glm_list, path = here("data", "glm_list.Rdata"))
+```
+
+Add individual snapper id
+```{r}
+n.list <- length(ctmc_list)
+
+for(i in 1:n.list){
+  glm_list[[i]]$id <- rep(as.numeric(unique(df$id)[i]), times = length(glm_list[[i]]$z))
+}
+```
+
+Convert from list to dataframe
+```{r}
+snap_dat<-glm_list[[1]]  
+for(i in 2:n_snap){
+  snap_dat<-rbind(snap_dat, glm_list[[i]])
+} 
+
+head(snap_dat)
+```
+
+Check for instantaneous and very small transitions and remove them.
+```{r}
+length(which(snap_dat$tau==0))
+# only 2,436 tau out of 4M are 0
+length(which(snap_dat$tau<10^-5))
+# and only 23k are less than 0.00005
+snap_dat<-snap_dat %>% filter(tau>10^-5) # Identifies instantaneous transitions
+```
+
+# Prep and Subset GLM Data
+I removed tau's under 10^-5 because that is what Hanks et al and Brennan et al use.  
+We probably want to think this over though.  
+
+Make sure habitat data is categorical for GLM
+```{r}
+snap_dat<-snap_dat %>% rename(habitat=ChickenRock_Classification) # rename the ChickenRock_Classification to habitat
+snap_dat$habitat<-as.factor(snap_dat$habitat) # factorize the habitats
+
+# Overview of the data
+head(snap_dat) 
+
+# write out files for later analyses
+#write_rds(snap_dat, path = here("data", "snap_dat.Rdata"))
+```
+
+# Parameterize CTMC GLM
+Fit GLM
+
+Variable description
+- z: the use category 
+- the crw (correlated random walk parameter that deals with the movement capacity) 
+
+## 1. Model 1: z ~ habitat + crw
+
+```{r}
+m1<-glm(z~habitat+crw,
+        offset=log(tau),
+        family=poisson,
+        data=snap_dat)
+```
+
+Summarize output
+```{r}
+summary(m1)
+```
+
+Some next steps:
+- fit a glm for each snappet to compare to SSF (and also see extent of shrinkage?)
+- consider other cell sizes (histogram of residence times seems to show that they are all very low)
+- add lasso shrinkage to the model 
+- add any directional covariates/gradients?
+
+
+
