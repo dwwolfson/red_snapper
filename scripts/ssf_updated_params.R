@@ -33,7 +33,7 @@ set.seed(168846)
 #' _____________________________________________________________________________
 #' ## Load Data
 #' 
-snap_steps <- readRDS("data/processed_data/steps_4ssf.RDS")
+snap_steps <- readRDS(here("data", "processed_data", "steps_4ssf.RDS"))
 #' 
 #' _____________________________________________________________________________
 #' ## Model 1: reefStart
