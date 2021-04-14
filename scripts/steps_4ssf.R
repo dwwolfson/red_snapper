@@ -92,7 +92,7 @@ snap_steps <- create_steps(nested_track = snap_tracks_sr, column2map = snap_trac
   create_steps(column2map = snap_tracks_sr$track_30mins) %>% rename(steps_30mins = new_step) %>% 
   create_steps(column2map = snap_tracks_sr$track_60mins) %>% rename(steps_60mins = new_step)
 # 
-snap_steps <- snap_steps %>% pivot_longer(cols = c(steps_2mins, steps_5mins, steps_10mins, steps_30mins, steps_60mins), names_to = "samp_rate", values_to = "steps") %>% mutate(id = paste(id, samp_rate, sep = "-")) # go long
+snap_steps <- snap_steps %>% pivot_longer(cols = c(steps_2mins, steps_5mins, steps_10mins, steps_30mins, steps_60mins), names_to = "samp_rate", values_to = "steps") %>% mutate(id = paste(id, samp_rate, sep = "-")) %>% select(id, samp_rate, steps) # go long
 
 glimpse(snap_steps)
 
