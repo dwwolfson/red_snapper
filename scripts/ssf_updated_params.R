@@ -34,14 +34,17 @@ set.seed(168846)
 #' ## Load Data
 #' 
 snap_steps <- readRDS(here("processed_data", "steps_4ssf.RDS"))
+#snap_steps <- readRDS(here("data","processed_data", "steps_4ssf.RDS"))
 #' 
 #' _____________________________________________________________________________
 #' ## Model 1: reefStart
 #' 
 #' Movement depends on where the individual is at the start of movement step. This is included in the model with the intraction between movement characteristics and reef habitat at the start of movement
 #' 
-ssf_start <- snap_steps %>%
-  mutate(mod_start = map(data, function(x) (try(fit_issf(case_ ~  + sl_ + log_sl_ + cos_ta_ + (reefStart):(sl_ +  log_sl_ + cos_ta_) + strata(step_id_), data = x)))))
+some_mins <- snap_steps %>% filter(samp_rate == "steps_2mins" | samp_rate == "steps_5mins" |samp_rate == "steps_10mins") %>% select(id, samp_rate, steps) # works for 2,5,10 mins sampling rates. For 30 and 60 minutes it produces errors and warnings
+#' 
+ssf_start <- some_mins %>%
+  mutate(mod_start = map(steps, function(x) (try(fit_issf(case_ ~  + sl_ + log_sl_ + cos_ta_ + (reefStart):(sl_ +  log_sl_ + cos_ta_) + strata(step_id_), data = x)))))
 
 #glimpse(ssf_start$mod_start) # which has columns id, data, mod_start
 
@@ -107,7 +110,9 @@ high_relief_sl <- ssf_start %>%
   mutate(speed_high = map_dbl(up_hr_sl, ~(.x$params$shape*.x$params$scale))) %>% 
   pluck("speed_high")
 
-speeds_df <- cbind(sand_sl, low_relief_sl, medium_relief_sl, high_relief_sl) %>% as.data.frame()
+glimpse(ssf_start)
+names <- ssf_start %>% pluck("id")
+speeds_df <- cbind(names, sand_sl, low_relief_sl, medium_relief_sl, high_relief_sl) %>% as.data.frame()
 
 speeds_df
 
