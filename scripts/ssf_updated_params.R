@@ -41,7 +41,7 @@ snap_steps <- readRDS(here("processed_data", "steps_4ssf.RDS"))
 #' 
 #' Movement depends on where the individual is at the start of movement step. This is included in the model with the intraction between movement characteristics and reef habitat at the start of movement
 #' 
-some_mins <- snap_steps %>% filter(samp_rate == "steps_2mins" | samp_rate == "steps_5mins" |samp_rate == "steps_10mins") %>% select(id, samp_rate, steps) # works for 2,5,10 mins sampling rates. For 30 and 60 minutes it produces errors and warnings
+some_mins <- snap_steps %>% filter(samp_rate == "steps_2mins" | samp_rate == "steps_5mins" |samp_rate == "steps_10mins") # works for 2,5,10 mins sampling rates. For 30 and 60 minutes it produces errors and warnings
 #' 
 ssf_start <- some_mins %>%
   mutate(mod_start = map(steps, function(x) (try(fit_issf(case_ ~  + sl_ + log_sl_ + cos_ta_ + (reefStart):(sl_ +  log_sl_ + cos_ta_) + strata(step_id_), data = x)))))
