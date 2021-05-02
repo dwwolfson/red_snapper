@@ -17,8 +17,10 @@ library(tidyverse)
 library(rgeos)
 
 seabed<-st_read(here("data/Seabed Maps/Shapefile/NF_19_06_Segmentation.shp"))
+crs_seabed<-st_crs(seabed)
 
-plot(seabed["Class_name"])
+
+# plot(seabed["Class_name"])
 
 # Merge the hardbottom categories
 seabed<-seabed %>% 
@@ -28,34 +30,34 @@ seabed<-seabed %>%
   group_by(binary_hab) %>% 
   summarise(geometry=st_union(geometry))
 
-plot(seabed)
+
 
 # Convert from polygon (with area), to line (w/o area)
 sea_lines<-st_cast(seabed, "MULTILINESTRING")
-sea_iso<-st_cast(sea_lines, "LINESTRING")
-
-#bring in raster 
-ras<-raster(here("data/Seabed Maps/geotiff/", "ChickenRock_Classification.tif"))
-
-# identify which cells in the raster are on the edge of sand and hardbottom
-# bob<-raster::extract(ras, sea_iso) # this takes forever, although it doesn't immediately run out of memory
-
-extent(sea_iso)
-extent(sea_lines)
-extent(seabed)
-# all the same
-
-extent(ras)
-# aaaalmost exactly the same
-extent(ras)<-extent(seabed)
-# now the same
 
 
-p<-as(ras, "SpatialPoints")
-sp_iso<-as(sea_iso, "Spatial")
-proj4string(p)
-proj4string(sp_iso)
+#bring in snapper points
+df<-read_csv(here("data/red.snapper.locations.csv"))
 
-d<-gDistance(p, sp_iso, byid=T)
-# Can't execute this line
-# Error: cannot allocate vector of size 15.6 Gb
+# convert snapper points to spatial object
+df<-df %>% st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+# transform points to crs of raster
+df<-st_transform(df, crs=crs_seabed)
+
+# double check
+st_crs(df)==st_crs(sea_lines)
+
+
+df$dist_edge<-NA
+
+for(i in 1:nrow(df)){
+  df$dist_edge[[i]] <- min(
+    st_distance(sea_lines, df[i,]))
+  print(i)
+  }
+
+# save output
+st_write(df, here("processed_data/points_with_dist_edge/df.gpkg"))
+write_csv(df, here("processed_data/points_with_dist_edge/df.csv"))
+saveRDS(df, here("processed_data/points_with_dist_edge/df.rds"))
